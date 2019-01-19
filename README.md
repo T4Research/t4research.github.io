@@ -1,74 +1,128 @@
-# [Start Bootstrap - Grayscale](https://startbootstrap.com/template-overviews/grayscale/)
+# T-Torch: searching trajectories in a fast way
+T-Torch is the world's first search engine for trajectory data, which is built over our research paper below:
+```
+Sheng Wang, Zhifeng Bao, J. Shane Culpepper, Zizhe Xie, Qizhi Liu, Xiaolin Qin: Torch: A Search Engine for Trajectory Data. SIGIR 2018: 535-544
+```
 
-[Grayscale](http://startbootstrap.com/template-overviews/grayscale/) is a multipurpose, one page HTML theme for [Bootstrap](http://getbootstrap.com/) created by [Start Bootstrap](http://startbootstrap.com/).
+## Supported queries 
+T-Torch is able to efficiently answer two typical types of queries now:
+* Boolean search
+  * Range query
+  * Path query
+  * Strict path query
+* Top-k similarity search, we support a list of similarity measures:
+  * Dynamic time wrapping (DTW)
+  * Longest common sub-sequence (LCSS)
+  * Edit distance on real sequence (EDR)
+  * Hausdorff distance
+  * Discrete Fréchet Distance
+  * Longest overlapped road segments (LORS)
 
-## Preview
+## Features of framework
+* T-Torch performs trajectory search over the mapped trajectories.
+  * Optimized map-matching algorithms over Graphhopper
+  * Ligtweight data storage
+* Fast search with
+  * Compressiable index
+  * Various similarity measures
+* Trajectory visualization on real road network
+  * Comming soon...
 
-[![Grayscale Preview](https://startbootstrap.com/assets/img/templates/grayscale.jpg)](https://blackrockdigital.github.io/startbootstrap-grayscale/)
 
-**[View Live Preview](https://blackrockdigital.github.io/startbootstrap-grayscale/)**
+## Getting started
+### 1. Map matching
 
-## Status
+```
+MapMatching mm = MapMatching.getBuilder().build("Resources/porto_raw_trajectory.txt","Resources/porto.osm.pbf");
+mm.start();
+```
 
-[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/BlackrockDigital/startbootstrap-grayscale/master/LICENSE)
-[![npm version](https://img.shields.io/npm/v/startbootstrap-grayscale.svg)](https://www.npmjs.com/package/startbootstrap-grayscale)
-[![Build Status](https://travis-ci.org/BlackrockDigital/startbootstrap-grayscale.svg?branch=master)](https://travis-ci.org/BlackrockDigital/startbootstrap-grayscale)
-[![dependencies Status](https://david-dm.org/BlackrockDigital/startbootstrap-grayscale/status.svg)](https://david-dm.org/BlackrockDigital/startbootstrap-grayscale)
-[![devDependencies Status](https://david-dm.org/BlackrockDigital/startbootstrap-grayscale/dev-status.svg)](https://david-dm.org/BlackrockDigital/startbootstrap-grayscale?type=dev)
+Map matching is the technique for projecting raw trajectories onto real road network.The first argument is the URI of raw trajectory data-set, while the second argument **"Resources/porto.osm.pbf"** should be the URI to your PBF file<sup>[1]</sup>
+After setup, call start() method to convert raw trajectories to mapped trajectories.
 
-## Download and Installation
+#### Note:
+```
+trajectoryID [[latitude1,longtitude1],[latitude2,longtitude2],...]
+```
+ 1. The format of trajectory data should be the same as it in sample data-set, and there is a **\t** character separating trajectory id and content of it
+ 2. It is your part to take care of data cleansing, as low quality trajectories leads to low projection rate, and high length trajectories (over 200) could affect query time.
 
-To begin using this template, choose one of the following options to get started:
-* [Download the latest release on Start Bootstrap](https://startbootstrap.com/template-overviews/grayscale/)
-* Install via npm: `npm i startbootstrap-grayscale`
-* Clone the repo: `git clone https://github.com/BlackrockDigital/startbootstrap-grayscale.git`
-* [Fork, Clone, or Download on GitHub](https://github.com/BlackrockDigital/startbootstrap-grayscale)
 
-## Usage
+### 2. Query
+After map-matching, we could perform trajectory retrieval over mapped trajectories. T-Torch provides high level class *Engine* containing simple APIs for query processing. 
+To get the engine ready( loading or building necessary indexes to support different types of query), 
+only a line of code is required: 
+```
+Engine engine = Engine.getBuilder().build();
+``` 
 
-### Basic Usage
+#### 1) Range query
+```
+   QueryResult ret = engine.findInRange(50, 50, 50);
+```
+The range query is used to retrieve trajectories passing through a specified rectangular area. To define the rectangular area, three arguments are needed. 
+Latitude and longitude defines the middle point, with radius( in meters) together representing the rectangular area.
 
-After downloading, simply edit the HTML and CSS files included with the template in your favorite text editor to make changes. These are the only files you need to worry about, you can ignore everything else! To preview the changes you make to the code, you can open the `index.html` file in your web browser.
+#### 2) Path query
+```
+   QueryResult ret = engine.findOnPath(query);
+```
+The Path query<sup>[2]</sup> is used to retrieve trajectories having at least one common edge with the query.
+The argument it takes is a "path" represented by a list of *Coordinate*.
 
-### Advanced Usage
+#### 3) Strict path query
+```
+   QueryResult ret = engine.findOnStrictPath(query)
+```
+The strict path query<sup>[2]</sup> is used to retrieve trajectories strictly passing through the entire query from beginning to end.
+The argument it takes is a "path" represented by a list of *Coordinate*.
 
-After installation, run `npm install` and then run `gulp dev` which will open up a preview of the template in your default browser, watch for changes to core template files, and live reload the browser when changes are saved. You can view the `gulpfile.js` to see which tasks are included with the dev environment.
+#### 4) Top-k trajectory similarity search
+```
+   QueryResult ret = engine.findTopK(query, 3);
+```
+The top-k query returns
+k highest ranked trajectories based on the specified similarity measure.
+First argument is a "query trajectory" represented by a list of *Coordinate*, 
+and the second is number of top results to return.
 
-#### Gulp Tasks
+### 3. QueryResult
+```
+if (ret.succeed){
+List<Trajectory<TrajEntry>> l = ret.getResultTrajectory();
+String mapVformat = ret.getMapVFormat();
+}else{ //do something}
+```
 
-- `gulp` the default task that builds everything
-- `gulp dev` browserSync opens the project in your default browser and live reloads when changes are made
-- `gulp css` compiles SCSS files into CSS and minifies the compiled CSS
-- `gulp js` minifies the themes JS file
-- `gulp vendor` copies dependencies from node_modules to the vendor directory
+After the query is processed, object of type QueryResult is returned uniformly. 
+It contains the query trajectory in raw form, the map-matched query trajectory, and all trajectories being retrieved. Also, you can project these on MapV<sup>[3]</sup> for visualization purpose.
 
-You must have npm and Gulp installed globally on your machine in order to use these features.
 
-## Troubleshooting and Help
 
-Start Bootstrap has a public Slack channel which is a great place to ask questions about this template and all things related to Start Bootstrap.
+## Main contributors
+  * Yunzhuang Shen
+  * Zizhe Xie
+  * Sheng Wang (Homepage: https://sites.google.com/site/shengwangcs/)
 
-**[Click here to join the Slack channel!](https://startbootstrap-slack.herokuapp.com/)**
+## Cite the paper
+If you use this code for your scientific work, please cite it as:
 
-## Bugs and Issues
+```
+Sheng Wang, Zhifeng Bao, J. Shane Culpepper, Zizhe Xie, Qizhi Liu, Xiaolin Qin: Torch: A Search Engine for Trajectory Data. SIGIR 2018: 535-544
+```
 
-Have a bug or an issue with this template? [Open a new issue](https://github.com/BlackrockDigital/startbootstrap-grayscale/issues) here on GitHub or leave a comment on the [template overview page at Start Bootstrap](http://startbootstrap.com/template-overviews/grayscale/).
+```
+@inproceedings{wang2018torch,
+  author          = {{Wang}, Sheng and {Bao}, Zhifeng and {Culpepper}, J. Shane and {Xie}, Zizhe and {Liu}, Qizhi and {Qin}, Xiaolin},
+  title           = "{Torch: {A} Search Engine for Trajectory Data}",
+  booktitle       = {Proceedings of the 41th International ACM SIGIR Conference on Research & Development in Information Retrieval},
+  organization    = {ACM},
+  pages     = {535--544},
+  year            = 2018,
+}
+```
 
-## About
+[1]: https://wiki.openstreetmap.org/wiki/PBF_Format
+[2]: https://dl.acm.org/citation.cfm?id=2666413 "Krogh, B., Pelekis, N., Theodoridis, Y., & Torp, K. (2014, November). Path-based queries on trajectory data. In Proceedings of the 22nd ACM SIGSPATIAL International Conference on Advances in Geographic Information Systems (pp. 341-350). ACM."
+[3]: http://mapv.baidu.com/
 
-Start Bootstrap is an open source library of free Bootstrap templates and themes. All of the free templates and themes on Start Bootstrap are released under the MIT license, which means you can use them for any purpose, even for commercial projects.
-
-* https://startbootstrap.com
-* https://twitter.com/SBootstrap
-
-Start Bootstrap was created by and is maintained by **[David Miller](http://davidmiller.io/)**, Owner of [Blackrock Digital](http://blackrockdigital.io/).
-
-* http://davidmiller.io
-* https://twitter.com/davidmillerskt
-* https://github.com/davidtmiller
-
-Start Bootstrap is based on the [Bootstrap](http://getbootstrap.com/) framework created by [Mark Otto](https://twitter.com/mdo) and [Jacob Thorton](https://twitter.com/fat).
-
-## Copyright and License
-
-Copyright 2013-2018 Blackrock Digital LLC. Code released under the [MIT](https://github.com/BlackrockDigital/startbootstrap-grayscale/blob/gh-pages/LICENSE) license.
